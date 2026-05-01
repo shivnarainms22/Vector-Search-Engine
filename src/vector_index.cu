@@ -31,6 +31,7 @@ VectorIndex::~VectorIndex() {
 // ── add ───────────────────────────────────────────────────────────────────────
 void VectorIndex::add(const float* vectors, int n) {
     if (n_ > 0) throw std::runtime_error("add() called twice; re-create the index");
+    if (!vectors || n <= 0) throw std::invalid_argument("add: vectors must be non-null and n > 0");
     n_ = n;
 
     size_t bytes = (size_t)n * dim_ * sizeof(float);
@@ -56,6 +57,7 @@ void VectorIndex::transpose_to_col_major() {
 SearchResult VectorIndex::search(
     const float* queries, int q, int k, KernelType kernel
 ) const {
+    if (n_ == 0) throw std::runtime_error("search: index is empty, call add() first");
     if (k > n_) throw std::invalid_argument("k > n");
 
     float*   d_q;
@@ -69,33 +71,41 @@ SearchResult VectorIndex::search(
     CUDA_CHECK(cudaMemcpy(d_q, queries, (size_t)q * dim_ * sizeof(float),
                           cudaMemcpyHostToDevice));
 
-    switch (kernel) {
-        case KernelType::NAIVE:
-            launch_naive(d_row_, d_q, d_dist, d_idx, n_, dim_, q, k);
-            break;
-        case KernelType::SMEM:
-            launch_smem(d_row_, d_q, d_dist, d_idx, n_, dim_, q, k);
-            break;
-        case KernelType::COALESCED:
-            launch_coalesced(d_col_, d_q, d_dist, d_idx, n_, dim_, q, k);
-            break;
-        case KernelType::WARP:
-            launch_warp(d_col_, d_q, d_dist, d_idx, n_, dim_, q, k);
-            break;
-    }
-    CUDA_CHECK(cudaDeviceSynchronize());
-
     SearchResult result;
-    result.distances.resize(q * k);
-    result.indices.resize(q * k);
-    CUDA_CHECK(cudaMemcpy(result.distances.data(), d_dist,
-                          q * k * sizeof(float),   cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(result.indices.data(),   d_idx,
-                          q * k * sizeof(int32_t), cudaMemcpyDeviceToHost));
+    try {
+        switch (kernel) {
+            case KernelType::NAIVE:
+                launch_naive(d_row_, d_q, d_dist, d_idx, n_, dim_, q, k);
+                break;
+            case KernelType::SMEM:
+                launch_smem(d_row_, d_q, d_dist, d_idx, n_, dim_, q, k);
+                break;
+            case KernelType::COALESCED:
+                launch_coalesced(d_col_, d_q, d_dist, d_idx, n_, dim_, q, k);
+                break;
+            case KernelType::WARP:
+                launch_warp(d_col_, d_q, d_dist, d_idx, n_, dim_, q, k);
+                break;
+            default:
+                throw std::invalid_argument("search: unknown KernelType");
+        }
+        CUDA_CHECK(cudaDeviceSynchronize());
 
-    cudaFree(d_q);
-    cudaFree(d_dist);
-    cudaFree(d_idx);
+        result.distances.resize(q * k);
+        result.indices.resize(q * k);
+        CUDA_CHECK(cudaMemcpy(result.distances.data(), d_dist,
+                              (size_t)q * k * sizeof(float),   cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(result.indices.data(),   d_idx,
+                              (size_t)q * k * sizeof(int32_t), cudaMemcpyDeviceToHost));
+    } catch (...) {
+        cudaFree(d_q);
+        cudaFree(d_dist);
+        cudaFree(d_idx);
+        throw;
+    }
+    CUDA_CHECK(cudaFree(d_q));
+    CUDA_CHECK(cudaFree(d_dist));
+    CUDA_CHECK(cudaFree(d_idx));
 
     return result;
 }
@@ -104,6 +114,7 @@ SearchResult VectorIndex::search(
 SearchResult VectorIndex::search_cpu(
     const float* queries, int q, int k
 ) const {
+    if (n_ == 0) throw std::runtime_error("search_cpu: index is empty, call add() first");
     SearchResult result;
     result.distances.resize(q * k);
     result.indices.resize(q * k);
