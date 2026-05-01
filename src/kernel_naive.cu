@@ -1,6 +1,7 @@
 #include "kernels.h"
 #include "cuda_utils.h"
 #include <cuda_runtime.h>
+#include <stdexcept>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
@@ -67,12 +68,16 @@ void launch_naive(
     float* d_dist_out, int32_t* d_idx_out,
     int n, int d, int q, int k
 ) {
+    if (k > n || n <= 0 || q <= 0 || k <= 0 || d <= 0)
+        throw std::invalid_argument("launch_naive: invalid arguments");
+
     float* d_all = nullptr;
     CUDA_CHECK(cudaMalloc(&d_all, (size_t)q * n * sizeof(float)));
 
     dim3 block(BLOCK_SIZE);
     dim3 grid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, q);
     naive_kernel<<<grid, block>>>(d_db_row, d_queries, d_all, n, d);
+    CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
     topk_via_thrust(d_all, d_dist_out, d_idx_out, n, q, k);
