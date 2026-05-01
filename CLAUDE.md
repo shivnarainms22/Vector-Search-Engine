@@ -9,7 +9,7 @@
 ```bash
 pip install pybind11
 cmake -B build -DCMAKE_CUDA_ARCHITECTURES="80;86"
-cmake --build build -j$(nproc)
+cmake --build build --parallel
 ```
 
 ## Run correctness tests
