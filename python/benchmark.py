@@ -48,11 +48,10 @@ def time_search(index, queries, k, kernel, warmup=1, runs=3) -> float:
 
 # ── Recall computation ─────────────────────────────────────────────────────────
 def compute_recall(got_idx: np.ndarray, gt_idx: np.ndarray, k: int) -> float:
-    """Recall@k: fraction of queries where true NN is in top-k results."""
-    gt_topk = gt_idx[:, :k]
+    """Recall@k: fraction of queries where the ground-truth NN appears in top-k results."""
     n_correct = sum(
         1 for qi in range(len(got_idx))
-        if got_idx[qi, 0] in gt_topk[qi]
+        if gt_idx[qi, 0] in got_idx[qi, :k]
     )
     return n_correct / len(got_idx)
 
@@ -61,13 +60,15 @@ def compute_recall(got_idx: np.ndarray, gt_idx: np.ndarray, k: int) -> float:
 def cpu_search(db: np.ndarray, queries: np.ndarray, k: int):
     """Numpy brute-force L2 search. Returns (ms, indices)."""
     t0 = time.perf_counter()
-    diffs = db[np.newaxis, :, :] - queries[:, np.newaxis, :]  # (Q, N, D)
-    dists = (diffs ** 2).sum(axis=2)                           # (Q, N)
-    idx   = np.argpartition(dists, k, axis=1)[:, :k]
-    idx   = idx[np.arange(len(queries))[:, None],
-                np.argsort(dists[np.arange(len(queries))[:, None], idx], axis=1)]
+    all_idx = []
+    for qi in range(len(queries)):
+        diffs = db - queries[qi]          # (N, D)
+        dists = (diffs ** 2).sum(axis=1)  # (N,)
+        part  = np.argpartition(dists, k)[:k]
+        part  = part[np.argsort(dists[part])]
+        all_idx.append(part)
     ms = (time.perf_counter() - t0) * 1000
-    return ms, idx
+    return ms, np.stack(all_idx)
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
