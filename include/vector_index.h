@@ -14,6 +14,9 @@ public:
     explicit VectorIndex(int dim);
     ~VectorIndex();
 
+    VectorIndex(const VectorIndex&)            = delete;
+    VectorIndex& operator=(const VectorIndex&) = delete;
+
     // Add N vectors from host memory, row-major layout (N x D)
     void add(const float* vectors, int n);
 
