@@ -14,11 +14,8 @@ Four CUDA kernels each add one optimization over the previous, producing a measu
 pip install pybind11 numpy pytest
 
 # Configure and build (on RunPod / Linux with CUDA 12.x)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="80;86"
+cmake -B build -DCMAKE_BUILD_TYPE=Release -Dpybind11_DIR=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
 cmake --build build --parallel
-
-# Copy Python extension to project root
-cp build/_vsearch*.so .
 ```
 
 ## Test
@@ -37,21 +34,27 @@ python -m pytest tests/test_bindings.py -v
 ## Benchmark
 
 ```bash
-# Download SIFT1M: http://corpus-texmex.irisa.fr/  (~500MB)
-python python/benchmark.py --data-dir /path/to/sift
+# Download SIFT1M (~560MB)
+wget ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz && tar -xzf sift.tar.gz
+
+PYTHONPATH=build python python/benchmark.py --data-dir sift/
 ```
 
 ## Benchmark Results
 
 *Benchmarked on A100 SXM4 40GB via RunPod. N=1M, D=128, Q=100, K=10.*
 
-| Version        | Time (ms) | Speedup | Recall@10 |
-|----------------|-----------|---------|-----------|
-| CPU baseline   | TBD       | 1x      | TBD       |
-| CUDA naive     | TBD       | TBD     | TBD       |
-| CUDA smem      | TBD       | TBD     | TBD       |
-| CUDA coalesced | TBD       | TBD     | TBD       |
-| CUDA warp      | TBD       | TBD     | TBD       |
+| Version        | Time (ms) | Speedup  | Recall@10 |
+|----------------|-----------|----------|-----------|
+| CPU baseline   | 21,415    | 1×       | 100%      |
+| CUDA naive     | 142       | 151×     | 100%      |
+| CUDA smem      | 140       | 153×     | 100%      |
+| CUDA coalesced | 86        | 250×     | 100%      |
+| CUDA warp      | 461       | 46×      | 100%      |
+
+**Notes:**
+- SMEM vs Naive: the query vector (128 floats = 512 bytes) fits in L1 cache on A100, so the shared memory load adds overhead without reducing traffic.
+- Warp kernel: uses K sequential passes over N vectors instead of a single pass + Thrust sort. At K=10 and N=1M that is 10× more distance computations, which outweighs the savings from eliminating the Q×N intermediate buffer. This tradeoff favors the warp approach only at very large N or very tight memory constraints.
 
 ## Optimization Story
 
