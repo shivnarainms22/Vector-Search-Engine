@@ -28,10 +28,10 @@ __device__ __forceinline__ void warp_reduce_min(float& val, int32_t& idx) {
 //   4. Thread 0 picks the global minimum from 8 warp candidates.
 //   5. Thread 0 records the selected index; all threads skip it next pass.
 __global__ void warp_kernel(
-    const float*   __restrict__ db,     // (D x N) column-major
-    const float*   __restrict__ q,      // (Q x D) row-major
-    float*         __restrict__ out_d,  // (Q x K)
-    int32_t*       __restrict__ out_i,  // (Q x K)
+    const float*   __restrict__ db,      // (D x N) column-major
+    const float*   __restrict__ queries, // (Q x D) row-major
+    float*         __restrict__ out_d,   // (Q x K)
+    int32_t*       __restrict__ out_i,   // (Q x K)
     int n, int d, int q, int k
 ) {
     extern __shared__ float s_query[];                   // [D]
@@ -48,7 +48,7 @@ __global__ void warp_kernel(
 
     // Load query into smem
     for (int i = tid; i < d; i += blockDim.x)
-        s_query[i] = q[qry * d + i];
+        s_query[i] = queries[qry * d + i];
     if (tid < k) s_selected[tid] = -1;
     __syncthreads();
 
