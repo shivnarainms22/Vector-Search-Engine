@@ -4,7 +4,7 @@ project(vector_search CUDA CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_ARCHITECTURES native)
-set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -27,7 +27,7 @@ set_target_properties(vsearch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Python extension module
 pybind11_add_module(_vsearch python/bindings.cpp)
-target_link_libraries(_vsearch PRIVATE vsearch)
+target_link_libraries(_vsearch PRIVATE vsearch CUDA::cudart)
 
 # Tests
 enable_testing()
