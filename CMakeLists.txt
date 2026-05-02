@@ -23,6 +23,7 @@ add_library(vsearch STATIC
 )
 target_include_directories(vsearch PUBLIC include)
 target_link_libraries(vsearch PUBLIC CUDA::cudart)
+set_target_properties(vsearch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Python extension module
 pybind11_add_module(_vsearch python/bindings.cpp)
